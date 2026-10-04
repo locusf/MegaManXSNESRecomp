@@ -1,0 +1,62 @@
+set -euo pipefail
+set -e
+export HOST_CC=/usr/bin/gcc
+export HOST_CXX=/usr/bin/g++
+export CC_FOR_BUILD=/usr/bin/gcc
+export CXX_FOR_BUILD=/usr/bin/g++
+
+rm -rf /tmp/game
+cp -r /source /tmp/game
+cd /tmp/game
+
+mkdir -p build
+cmake -S . -B build -G Ninja \
+  -DCMAKE_TOOLCHAIN_FILE=/opt/cross/aarch64.cmake \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DSNESRECOMP_SDL_BACKEND=SDL2 \
+  -DSNESRECOMP_SDL3_FETCH=OFF \
+  -DSNESRECOMP_SETUP_HOST=ON \
+  -DBUILD_TESTING=OFF \
+  -DPython3_EXECUTABLE=$(command -v python3) \
+  2>&1 | tee /tmp/cmake_configure.log
+
+cmake --build build --target MegaManXSNESRecomp -j"$(nproc)" 2>&1 | tee /tmp/cmake_build.log
+
+echo "---- verifying binary ----"
+file build/MegaManXSNESRecomp
+test -f build/MegaManXSNESRecomp
+
+mkdir -p /output/package
+cp build/MegaManXSNESRecomp /output/package/MegaManXSNESRecomp
+cp config.ini /output/package/
+cp LICENSE /output/package/ 2>/dev/null || true
+cp README.md /output/package/ 2>/dev/null || true
+
+cat > /output/package/README_ROM_REQUIRED.txt <<'EOF'
+This package is the "setup host" build of the Mega Man X SNES recomp
+(snesrecomp/recomp-ui). It does NOT contain Capcom's Mega Man X ROM or
+any decompiled game code derived from it, in line with the project's
+own licensing model.
+
+On first run it opens the launcher wizard. Supply your own legally
+obtained Mega Man X (USA) SNES ROM (mmx.sfc) when prompted; the wizard
+runs the project's local recompiler/regen step and rebuilds the real
+playable game from that point. Until that step is completed, the
+executable can show the launcher UI and menus but will refuse to boot
+SNES guest code (this is enforced in src/setup_host.c, not simulated).
+EOF
+
+cat > /output/package/launch.sh <<'EOF'
+#!/bin/sh
+# Portable launcher for the Mega Man X SNES recomp "setup host" build.
+# Preserves Knulli's controller mapping: SDL_GAMECONTROLLERCONFIG is
+# already exported by the OS environment before this script runs, and we
+# must not clobber or unset it. Just cd and exec the ARM64 ELF.
+cd "$(dirname "$0")"
+exec ./MegaManXSNESRecomp "$@"
+EOF
+chmod +x /output/package/launch.sh
+
+echo "---- package contents ----"
+find /output/package -maxdepth 2
+file /output/package/MegaManXSNESRecomp

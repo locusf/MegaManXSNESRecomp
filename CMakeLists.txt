@@ -14,7 +14,14 @@ set(RECOMP_UI_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/recomp-ui" CACHE PATH "recomp-ui
 set(SNESRECOMP_ENABLE_MODS ON CACHE BOOL "Shared mod package runtime" FORCE)
 # Match Gundam Endless Duel's internet-capable lobby build. Per-target netplay
 # keeps the unmodified Japanese edition and small unit tests independent.
-set(SNESRECOMP_NET_ICE ON CACHE BOOL "Internet netplay transport" FORCE)
+# Internet-capable ICE/TURN transport needs libjuice, which this helper
+# fetches from GitHub when no system/vendored copy is present. Offline ARM64
+# package builds (no network, no vendored third_party/libjuice here) cannot
+# satisfy that fetch, so keep ICE off for those builds; LAN lobby/netplay and
+# every single-player gameplay path are unaffected. Pass
+# -DSNESRECOMP_NET_ICE=ON (with network access or RNET_LIBJUICE_ROOT set) to
+# restore the internet transport.
+set(SNESRECOMP_NET_ICE OFF CACHE BOOL "Internet netplay transport")
 include(${SNESRECOMP_ROOT}/runner/runner.cmake)
 include(${RECOMP_UI_ROOT}/recomp_ui.cmake)
 
